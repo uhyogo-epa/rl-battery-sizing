@@ -4,22 +4,21 @@ import torch
 import torch.nn.functional as F
 
 class RenewableEnergyEnv:
-
-    def __init__(self, mode= 'discrete',battery_times= 1):
+    def __init__(self, mode= 'discrete',battery_times= 0.1):
         self.mode = mode
         self.eta_c_t = 0.96  # 充電効率
         self.eta_d_t = 0.995  # 放電効率
         self.observation_space = 3  # 充放電の状態, 日射量, 市場価格をobservationとする
         self.scaling_values = np.array([0.0,0.5,1.0])  # scaling値を0.0, 0.5, 1.0に設定
-        self.bidding_values = np.arange(0.0, 0.7, 0.1)  # bidding値を0.0から0.7まで0.1刻みで設定
+        self.bidding_values = np.arange(0.0, 0.7, 0.05)  # bidding値を0.0から0.7まで0.1刻みで設定
         self.action_space = 2 if mode == "continuous" else len(self.scaling_values) * len(self.bidding_values)
         self.current_step = 0
         self.soc_max = 0.9
         self.soc_min = 0.1
-        self.solar_radiation_all = np.load("C:/Users/manta/OneDrive/ドキュメント/IEEE/data/sample_data_pv.npy") 
-        self.solar_radiation = self.solar_radiation_all[4345:4345 + 24*7]
-        self.market = pd.read_csv("C:/Users/manta/OneDrive/ドキュメント/IEEE/data/spot_summary_2022.csv", encoding='shift_jis')
-        self.market_prices = self.extract_market_prices(self.market,8690,8690 + 24*2*7)
+        self.solar_radiation_all = np.load("/home/students3/mantani/IEEE_TEMPR/data/sample_data_pv.npy") 
+        self.solar_radiation = self.solar_radiation_all[4344:4344 + 24*7]
+        self.market = pd.read_csv("/home/students3/mantani/IEEE_TEMPR/data/spot_summary_2022.csv", encoding='shift_jis')
+        self.market_prices = self.extract_market_prices(self.market,4344*2,4344*2 + 24*2*7)
         self.gamma = 0.9 # 割引率の設定
         self.battery_times = battery_times
         self.E_max = max(self.solar_radiation) * self.battery_times
@@ -69,10 +68,8 @@ class RenewableEnergyEnv:
         else:
             # 連続アクションの場合
             self.scaling = np.clip(action[0], 0.0, 1.0)
-            self.bidding = np.clip(action[1]*0.6, 0.0, 0.6)
+            self.bidding = np.clip(action[1]*0.7, 0.0, 0.7)
             
-        self.bidding = np.clip(self.bidding, 0.0, 0.7)  
-        self.scaling = np.clip(self.scaling, 0.0, 1.0)
         delta_t = 0.25
         self.soc_history.append(self.soc)
         
@@ -108,9 +105,9 @@ class RenewableEnergyEnv:
             observation = np.array([self.soc, 0.0, 0.0], dtype=np.float32)  # 終了時のダミー観測値
         
         else:
-            observation = np.array([self.soc, current_solar_radiation, current_market_price], dtype=np.float32)
+            observation = np.array([self.soc, self.solar_radiation[self.current_step], current_market_price], dtype=np.float32)
                 
-        reward = self.calculate_reward(self.soc,  current_market_price , current_solar_radiation, self.bidding, self.Pc_t, self.Pd_t, delta_t) 
+        reward = self.calculate_reward(self.soc, current_market_price, current_solar_radiation, self.bidding, self.Pc_t, self.Pd_t, delta_t) 
         
         self.total_reward = self.total_reward * self.gamma + reward  # 割引率を適用
         
