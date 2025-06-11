@@ -17,7 +17,7 @@ device = torch.device("cpu")
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.hidden_space = 32
+        self.hidden_space = 64
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.max_action = max_action
