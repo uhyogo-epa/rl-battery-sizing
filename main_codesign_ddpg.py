@@ -12,7 +12,7 @@ from agent.codesign_ddpg  import  CodesignDDPGagent
 ray.init(ignore_reinit_error=True)
 
 @ray.remote
-def run_training(seed, mu, scheduling_rate):
+def run_training(seed, battery_price, mu):
 # if __name__ == "__main__":
     # Set seeds
     random.seed(seed)
@@ -75,7 +75,7 @@ def run_training(seed, mu, scheduling_rate):
                  POLICY_FREQ )
     
     # LOG_DIR = f'ddpg_logs/test_run_{datetime.now().strftime("%m%d_%H%M")}'
-    LOG_DIR = f'codesign_ddpg_logs/battery_{mu}_{scheduling_rate:.0e}/test_run_{datetime.now().strftime("%m%d_%H%M")}_seed_{seed}_battery_{mu}_{scheduling_rate:.0e}'
+    LOG_DIR = f'codesign_ddpg_logs_sheduling_decay_0.999_learning_rate_1e-6/battery_{battery_price}_mu_{mu}_10000/test_run_seed_{seed}_battery_{battery_price}_{mu}'
     
     agent.train(rl_env,
               EPISODES      = 5000,
@@ -90,22 +90,26 @@ def run_training(seed, mu, scheduling_rate):
               min_epi_codesign    = 300,
               mu    = mu,
               sigma = 0.2,
-              battery_price_max = 4000,
-              scheduling_rate = scheduling_rate)
+              battery_price_max = battery_price,
+              scheduling_rate = 1,
+              scheduling_decay = 0.999)
 
 if __name__ == "__main__":
-    seeds = [1,2,3]  
-    mu = 0.1
-    mu_max = 0.6
-    scheduling_rates = [1e-3,1e-4]  # 直接リストで指定
-    
-    while mu <= mu_max:
+    seeds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  
+    battery_price_min = 2000
+    battery_price_max = 6000
+    solar_radiation_all = np.load("/home/students3/mantani/IEEE_TEMPR/data/sample_data_pv.npy") 
+    solar_radiation = solar_radiation_all[4344:4344 + 24*7]
+    mus = [max(solar_radiation)*0.5,max(solar_radiation)*1.0]  
+
+    battery_price = battery_price_min
+    while battery_price <= battery_price_max:
         tasks = []
-        for scheduling_rate in scheduling_rates:
+        for mu in mus:
             for seed in seeds:
-                task = run_training.remote(seed, mu, scheduling_rate)  # Rayでリモートタスクを実行
+                task = run_training.remote(seed,battery_price,mu)
                 tasks.append(task)
-
-        ray.get(tasks)  # すべてのタスクの完了を待つ
-
-        mu += 0.1  # 0.1ずつ増やす
+            
+        ray.get(tasks)
+        
+        battery_price += 2000  
