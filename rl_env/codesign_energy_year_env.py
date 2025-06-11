@@ -4,8 +4,8 @@ import pandas as pd
 class AllCodesignEnergyEnv:
     def __init__(self,agent_idx):
         # データの読み込み
-        self.solar_radiation_all = np.load("/home/students3/mantani/IEEE/data/sample_data_pv.npy") 
-        self.market_all = pd.read_csv("/home/students3/mantani/IEEE/data/spot_summary_2022.csv", encoding='shift_jis')
+        self.solar_radiation_all = np.load("/home/students3/mantani/IEEE_TEMPR/data/sample_data_pv.npy") 
+        self.market_all = pd.read_csv("/home/students3/mantani/IEEE_TEMPR/data/spot_summary_2023.csv", encoding='shift_jis')
         
         self.days_per_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         self.hours_per_day = 24
@@ -16,8 +16,8 @@ class AllCodesignEnergyEnv:
         self.soc_max = 0.9
         self.soc_min = 0.1 
         
-        self.scaling_values = np.array([0.0,0.5,1.0,1.5])  # scaling値を0.0, 0.5, 1.0に設定
-        self.bidding_values = np.arange(0.0, 0.9, 0.1)  # bidding値を0.0から0.8まで0.1刻みで設定
+        self.scaling_values = np.array([0.0,0.5,1.0,1.5,2.0])  # scaling値を0.0, 0.5, 1.0に設定
+        self.bidding_values = np.arange(0.0, 0.9, 0.05)  # bidding値を0.0から0.8まで0.1刻みで設定
         self.observation_space = 3 # 充放電の状態, 日射量, 市場価格をobservationとする
         self.action_space = len(self.scaling_values) * len(self.bidding_values) # アクションの次元の設定
         
@@ -77,7 +77,7 @@ class AllCodesignEnergyEnv:
         # 保存用
         self.soc_history = [] 
         self.solar_generation_history = []
-        self.step_rewards = []
+        self.reward_history = []
         self.Pc_t = []
         self.Pd_t = []
         self.penalty_history = []
@@ -134,7 +134,7 @@ class AllCodesignEnergyEnv:
                 
         reward = self.calculate_reward(self.agent_idx, self.days_per_month, self.soc, current_market_price, current_solar_radiation, self.bidding, self.Pc_t, self.Pd_t, delta_t) 
         
-        self.step_rewards.append(reward)
+        self.reward_history.append(reward)
         
         return observation, reward, done
 
