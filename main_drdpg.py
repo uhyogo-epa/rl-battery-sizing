@@ -4,14 +4,16 @@ import torch
 import os
 from   datetime import datetime
 from multiprocessing import Process
-
+import ray
 # Environment
 from rl_env.energy import RenewableEnergyEnv
 
 ###############################################################################
 # Main func with pytorch
 from agent.drdpg import DRDPGagent
+ray.init(ignore_reinit_error = True)
 
+@ray.remote
 def run_training(seed, battery_times):
 # if __name__ == "__main__":
     random.seed(seed)
@@ -40,7 +42,7 @@ def run_training(seed, battery_times):
     
     episodes             = 1000 
     lookup_step          = 24
-    gamma                = 0.9
+    gamma                = 0.99
     tau                  = 5e-3
     
     #noise parameter
@@ -59,7 +61,7 @@ def run_training(seed, battery_times):
     agent = DRDPGagent(state_space, action_space, max_action, buffer_len, lookup_step, Actor_learning_rate, Critic_learning_rate,
                        gamma, batch_size,tau ,initial_noise,noise_decay,noise_min, random_update,min_epi_num)
     
-    LOG_DIR = f'drdpg_logs/test_run_{datetime.now().strftime("%m%d_%H%M")}_seed_{seed}_battery_{battery_times}'
+    LOG_DIR = f'drdpg_logs_com/battery_{round(battery_times,2)}/test_run_seed_{seed}_battery_{round(battery_times,2)}'
     # LOG_DIR = f'drdpg_logss/test_run_{datetime.now().strftime("%m%d_%H%M")}_seed_{seed}'
     
     os.makedirs(LOG_DIR, exist_ok=True) 
@@ -76,19 +78,16 @@ def run_training(seed, battery_times):
     
     
 if __name__ == "__main__":
-    seeds = [1,2,3,4,5]  
-    processes = []
-    battery_times = 0.25
-    battery_times_max = 1.0
+    seeds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+    battery_times =0.4
+    battery_times_max = 1.2
     while battery_times <= battery_times_max:
-        processes = []
+        tasks = []
         for seed in seeds:
-            p = Process(target=run_training, args=(seed,battery_times))
-            p.start()
-            processes.append(p)
+            task = run_training.remote(seed,battery_times)
+            tasks.append(task)
         
-        for p in processes:
-            p.join()
+        ray.get(tasks)
         
-        battery_times += 0.25
+        battery_times += 0.2
   
