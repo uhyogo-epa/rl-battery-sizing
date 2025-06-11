@@ -26,7 +26,7 @@ class Critic(nn.Module):
         assert state_space is not None, "None state_space input: state_space should be selected."
         assert action_space is not None, "None action_space input: action_space should be selected."
 
-        self.hidden_space = 32
+        self.hidden_space = 64
         self.state_space  = state_space
         self.action_space = action_space
 
@@ -145,7 +145,8 @@ class DQN:
               SAVE_AGENTS   = True,
               SAVE_FREQ     = 1,
               RESTART_EP    = None,
-              seed =1
+              seed =1,
+              battery_times =1
               ):
         
         
@@ -209,9 +210,9 @@ class DQN:
         
                 # update current state
                 state = next_state
-                bidding_history.append(episode_bidding)
-                penalty_history.append(episode_penalty_history)
-                battery_penalty_history.append(episode_battery_penalty_history)
+            bidding_history.append(episode_bidding)
+            penalty_history.append(episode_penalty_history)
+            battery_penalty_history.append(episode_battery_penalty_history)
                 
     
             ################################################
@@ -246,14 +247,15 @@ class DQN:
             print(f"Episode {episode + 1}: Reward : {episode_reward}")
             print(f"Episode {episode + 1}: episode_q0: {max_q_values}")
         
-        bidding_df = pd.DataFrame(bidding_history)
-        penalty_df = pd.DataFrame(penalty_history)
-        battery_penalty_df = pd.DataFrame(battery_penalty_history)
-        # Save each DataFrame to CSV files
-        bidding_df.to_csv(f'action/episode_bidding_seed_{seed}_{current_datetime}.csv', index=False)
-        penalty_df.to_csv(f'action/episode_penalty_seed_{seed}_{current_datetime}.csv', index=False)
-        battery_penalty_df.to_csv(f'action/episode_battery_penalty_seed_{seed}_{current_datetime}.csv', index=False)
-        
+            bidding_df = pd.DataFrame(bidding_history)
+            penalty_df = pd.DataFrame(penalty_history)
+            battery_penalty_df = pd.DataFrame(battery_penalty_history)
+            
+            # Save each DataFrame to CSV files
+            bidding_df.to_csv(f'dqn_action/episode_bidding_seed_{seed}_battery_{round(battery_times,2)}_{current_datetime}.csv', index=False)
+            penalty_df.to_csv(f'dqn_action/episode_penalty_seed_{seed}_battery_{round(battery_times,2)}_{current_datetime}.csv', index=False)
+            battery_penalty_df.to_csv(f'dqn_action/episode_battery_penalty_seed_{seed}_battery_{round(battery_times,2)}_{current_datetime}.csv', index=False)
+            
    
     def update_critic(self):
 
