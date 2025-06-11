@@ -6,13 +6,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 class EnergyLSTMEnv:
-    def __init__(self,mode = 'discrete', battery_times = 1):
+    def __init__(self,mode = 'discrete', battery_times = 1,learning_rate = 0.1):
         self.mode = mode
         #データの読み込み
-        self.solar_radiation_all = np.load("C:/Users/manta/OneDrive/ドキュメント/IEEE/data/sample_data_pv.npy") 
-        self.solar_radiation = self.solar_radiation_all[4345:4345 + 24*7]
-        self.market = pd.read_csv("C:/Users/manta/OneDrive/ドキュメント/IEEE/data/spot_summary_2022.csv", encoding='shift_jis')
-        self.market_prices = self.extract_market_prices(self.market,8690,8690 + 24*2*7)
+        self.solar_radiation_all = np.load("/home/students3/mantani/IEEE_TEMPR/data/sample_data_pv.npy") 
+        self.solar_radiation = self.solar_radiation_all[4344:4344 + 24*7]
+        self.market = pd.read_csv("/home/students3/mantani/IEEE_TEMPR/data/spot_summary_2022.csv", encoding='shift_jis')
+        self.market_prices = self.extract_market_prices(self.market,8688,8688 + 24*2*7)
         
         # 蓄電池のパラメータ
         self.eta_c_t = 0.96  # 充電効率
@@ -23,14 +23,14 @@ class EnergyLSTMEnv:
         self.E_max = max(self.solar_radiation) * battery_times
         self.P_max = max(self.solar_radiation) * battery_times
         self.scaling_values = np.array([0.0,0.5,1.0])  # scaling値を0.0, 0.5, 1.0に設定
-        self.bidding_values = np.arange(0.0, 0.7, 0.1)  # bidding値を0.0から0.7まで0.1刻みで設定
+        self.bidding_values = np.arange(0.0, 0.7, 0.05)  # bidding値を0.0から0.7まで0.1刻みで設定
         self.action_space = 2 if mode == "continuous" else len(self.scaling_values) * len(self.bidding_values)
-
+        self.learning_rate = learning_rate
         self.state_space = 3
 
         self.gamma = 0.9 # 割引率の設定
 
-        self.hidden_space = 32
+        self.hidden_space = 64
         self.num_layers = 1
         self.batch_size = 1
         
@@ -45,7 +45,7 @@ class EnergyLSTMEnv:
         self.lstm = nn.LSTM(2, self.hidden_space ,self.num_layers, batch_first=True)
         self.linear = nn.Linear(self.hidden_space, 2)
         
-        self.optimizer = optim.Adam(self.lstm.parameters(), lr=1e-7)
+        self.optimizer = optim.Adam(self.lstm.parameters(), lr=self.learning_rate)
         
         self.reset()
         
