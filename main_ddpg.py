@@ -1,9 +1,8 @@
 import numpy as np
 import random
 from datetime import datetime
-from torch.utils.tensorboard import SummaryWriter
 from multiprocessing import Process
-import multiprocessing
+import ray
 
 # Environment
 # from rl_env.energy import RenewableEnergyEnv
@@ -11,11 +10,13 @@ from rl_env.energy_lstm import EnergyLSTMEnv
 ###############################################################################
 from agent.ddpg  import  DDPGagent
 ###############################################################################
-def run_training(seed, battery_times):
+ray.init(ignore_reinit_error = True)
+@ray.remote
+def run_training(seed, battery_times,learning_rate):
 # if __name__ == "__main__":
     # Set seeds
-    random.seed(1)
-    np.random.seed(1)
+    random.seed(seed)
+    np.random.seed(seed)
     # start_time = datetime.now()
     
     # log_dir = 'logs/test_run_'+datetime.now().strftime('%m%d%H%M')
@@ -24,14 +25,13 @@ def run_training(seed, battery_times):
     # Environment
     # rl_env      = RenewableEnergyEnv(mode ='continuous')
     mode = 'continuous'
-    # battery_times = 0.9
-    rl_env      = EnergyLSTMEnv(mode,battery_times)
+    rl_env      = EnergyLSTMEnv(mode,battery_times,learning_rate)
     
     state_dim   = rl_env.observation_space
     act_dim     = rl_env.action_space
     max_act     = 1
     
-    #DRQN　parameter
+    #DRQN縲parameter
     ACTOR_LEARN_RATE  = 1e-3
     CRITIC_LEARN_RATE = 1e-3
     DISCOUNT          = 0.9
@@ -62,7 +62,7 @@ def run_training(seed, battery_times):
                  POLICY_FREQ )
     
     # LOG_DIR = f'ddpg_logs/test_run_{datetime.now().strftime("%m%d_%H%M")}'
-    LOG_DIR = f'ddpg_lstm_logs/battery_{round(battery_times,2)}/test_run_{datetime.now().strftime("%m%d_%H%M")}_seed_{seed}_battery_{round(battery_times,2)}'
+    LOG_DIR = f'ddpg_lstm_logs_1/battery_{round(battery_times,2)}/test_run_seed_{seed}_battery_{round(battery_times,2)}'
     
     agent.train(rl_env,
               EPISODES      = 1000,
@@ -75,18 +75,17 @@ def run_training(seed, battery_times):
               battery_times = battery_times)
 
 if __name__ == "__main__":
-    seeds = [1,2,3]
-    processes = []
-    battery_times  = 0.8
-    battery_times_max = 1.2
-    while  battery_times  <=  battery_times_max:
-        processes = []
-        for seed in seeds:
-            p = Process(target=run_training, args=(seed, battery_times))
-            p.start()
-            processes.append(p)
+    seeds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+    battery_times = 0.1
+    battery_times_max = 1.4
+    learning_rates = [1e-7]
+    while battery_times <= battery_times_max:
+        tasks = []
+        for learning_rate in learning_rates:
+            for seed in seeds:
+                task = run_training.remote(seed,battery_times,learning_rate)
+                tasks.append(task)
+            
+        ray.get(tasks)
         
-        for p in processes:
-            p.join()
-        
-        battery_times += 0.2
+        battery_times += 0.1
