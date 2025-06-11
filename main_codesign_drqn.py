@@ -3,7 +3,7 @@ import random
 # from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from multiprocessing import Process
-
+import ray
 from agent.codesign_drqn import CodesignDRQNagent
 
 # Environment
@@ -13,7 +13,9 @@ from rl_env.codesign_energy_env import CodesignEnergyEnv
 ##########################################################
 # Main     
 ##########################################################
-def run_training(seed, battery_price,scheduling_rate):
+ray.init(ignore_reinit_error = True)
+@ray.remote
+def run_training(seed, battery_price,mu):
 # if __name__ == "__main__":
     random.seed(seed)
     np.random.seed(seed)
@@ -22,7 +24,7 @@ def run_training(seed, battery_price,scheduling_rate):
     # writer  = SummaryWriter(log_dir=log_dir)
     mode= 'discrete'
     # Environment
-    env               = CodesignEnergyEnv(mode)
+    env               = CodesignEnergyEnv(mode) 
     state_space       = env.observation_space
     action_space      = env.action_space
     rho_space         = env.rho_space
@@ -49,7 +51,7 @@ def run_training(seed, battery_price,scheduling_rate):
     # training
     #########################################
     
-    LOG_DIR = f'codesign_drqn_logs/cost_{battery_price}_{scheduling_rate:.0e}/test_run_{datetime.now().strftime("%m%d_%H%M")}_seed_{seed}_cost_{battery_price}_{scheduling_rate:.0e}'
+    LOG_DIR = f'codesign_drqn_logs_3/cost_{battery_price}_mu_{mu}/test_run_seed_{seed}_cost_{battery_price}_mu_{mu}'
     agent.train(env, 
                 EPISODES      = 5000, 
                 SHOW_PROGRESS = True, 
@@ -60,30 +62,31 @@ def run_training(seed, battery_price,scheduling_rate):
                 learning_rate_mu    = 1e-5,
                 learning_rate_sigma = 0,
                 min_epi_codesign    = 300,
-                mu    = 0.3,
+                mu    = mu,
                 sigma = 0.2,
                 battery_price_max=battery_price,
-                scheduling_rate = scheduling_rate
+                scheduling_rate = 1,
+                scheduling_decay= 0.995
                 )
     
 if __name__ == "__main__":
-    seeds = [1,2]  
-    battery_price_min = 4000
-    battery_price_max = 4000
-    scheduling_rates = [5e-2,1e-2]  # 直接リストで指定
+    seeds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  
+    battery_price_min = 2000
+    battery_price_max = 6000
+    solar_radiation_all = np.load("/home/students3/mantani/IEEE_TEMPR/data/sample_data_pv.npy") 
+    solar_radiation = solar_radiation_all[4344:4344 + 24*7]
+    mus = [max(solar_radiation)*0.5]  
 
     battery_price = battery_price_min
     while battery_price <= battery_price_max:
-        for scheduling_rate in scheduling_rates:  # 指定したリストの値をループ
-            processes = []
+        tasks = []
+        for mu in mus:
             for seed in seeds:
-                p = Process(target=run_training, args=(seed, battery_price, scheduling_rate))
-                p.start()
-                processes.append(p)
+                task = run_training.remote(seed,battery_price,mu)
+                tasks.append(task)
             
-            for p in processes:
-                p.join()
+        ray.get(tasks)
         
-        battery_price += 1000  # 1000ずつ増やす
+        battery_price += 2000  
 # -*- coding: utf-8 -*-
 
