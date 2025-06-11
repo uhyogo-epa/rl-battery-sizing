@@ -92,7 +92,9 @@ class Learner:
 
         self.episode_q_values = []
         self.optimizer = optim.Adam(self.Q.parameters(), lr=learning_rate)
-        self.battery_price = 1000 
+        self.battery_price_max = 1000 
+        self.scheduling_rate = 1
+        self.scheduling_decay = 0.995
         
     def get_weights(self):
         return self.Q.state_dict()
@@ -119,7 +121,9 @@ class Learner:
         rhos    = np.array(rho_list)
         incomes = np.array(income_list)
         # compute G
-        G = incomes - rhos * self.battery_price
+        battery_price = self.battery_price_max * (1-self.scheduling_rate)
+        self.scheduling_rate = self.scheduling_rate* self.scheduling_decay
+        G = incomes - rhos * battery_price
         
         # muの更新
         mu_grad = (((rhos - mu) / (sigma ** 2)) * (G - G.mean())).mean()
@@ -132,7 +136,7 @@ class Learner:
         # 更新後のphiを返す
         phi = [mu, sigma]
         
-        return phi
+        return phi,battery_price
     
     def save_weights(self,ckpt_path):
         
@@ -162,17 +166,19 @@ class Tester:
         episode_penalty_history = []
         episode_battery_penalty_history = []
         episode_bidding_history = []
+        episode_reward_history = []
+        
         episode_record = EpisodeBuffer()
         
         for t in range(max_step):
-            obs, h, c, episode_reward, episode_record, episode_reward_discount, done, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history  = self.simulate_train_step(obs, rho, h, c, epsilon_tester, gamma, episode_reward, episode_record,  episode_reward_discount, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history)
+            obs, h, c, episode_reward, episode_record, episode_reward_discount, done, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history,episode_reward_history  = self.simulate_train_step(obs, rho, h, c, epsilon_tester, gamma, episode_reward, episode_record,  episode_reward_discount, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history,episode_reward_history)
             
             if done:
                 break
     
-        return self.agent_idx, rho, episode_reward, episode_record, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history
+        return self.agent_idx, rho, episode_reward, episode_record, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history,episode_reward_history
     
-    def simulate_train_step(self,  obs, rho, h, c, epsilon_tester, gamma, episode_reward, episode_record, episode_reward_discount, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history):
+    def simulate_train_step(self,  obs, rho, h, c, epsilon_tester, gamma, episode_reward, episode_record, episode_reward_discount, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history,episode_reward_history):
         self.episode_q_values = []
         # 観測とrhoを結合して行動を取得
         obs_rho = np.concatenate([obs, np.array([rho])])  # [obs, rho].numpy
@@ -188,6 +194,7 @@ class Tester:
         episode_reward += r
         episode_reward_discount = r + gamma * episode_reward_discount
         
+        episode_reward_history.append(r)
         episode_bidding_history.append(self.env.bidding)
         episode_penalty_history.append(self.env.penalty)
         episode_battery_penalty_history.append(self.env.battery_penalty)
@@ -205,7 +212,7 @@ class Tester:
             max_q_value = q_values.max().item()
             self.episode_q_values.append(max_q_value)
             
-        return obs, h, c, episode_reward, episode_record, episode_reward_discount, done, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history
+        return obs, h, c, episode_reward, episode_record, episode_reward_discount, done, episode_penalty_history, episode_battery_penalty_history,episode_bidding_history,episode_reward_history
 
 ####################################################################
 # Main training loop
@@ -232,7 +239,7 @@ def main(num_cpus=12, gamma=0.99):
     target_update_period = 4
     eps_start = 1.0
     eps_end   = 0.001
-    eps_decay = 0.9995
+    eps_decay = 0.999
     tau       = 1e-2
     max_step  = 8760
     max_epi_num = 100
@@ -245,7 +252,7 @@ def main(num_cpus=12, gamma=0.99):
     ##############################
     # Codesing parameters
     ##############################
-    learning_rate_mu    = 1e-5
+    learning_rate_mu    = 0
     learning_rate_sigma = 0
     min_epi_codesign =  2000
     device = torch.device("cpu")
@@ -259,13 +266,18 @@ def main(num_cpus=12, gamma=0.99):
                                    lookup_step=lookup_step)
 
     # data for co-design
-    mu    = 0.6
-    sigma = 0.2
+    solar_radiation_all = np.load("/home/students3/mantani/IEEE/data/sample_data_pv.npy") 
+    battery_capacity= 0.5
+    mu    = max(solar_radiation_all)*battery_capacity
+    sigma = 0.0000000001
     income_list = [] ############# TODO: reward -> income
     rho_list    = []
     bidding_history = []  # List to collect bidding data
+    reward_history = []
     history =[]
-    log_dir = 'codesign_apex_logs/test_run_'+datetime.now().strftime('%m%d%H%M')
+    penalty_history = []
+    battery_penalty_history = []
+    log_dir = f'codesign_drqn_apex_logs_2023/battery_{battery_capacity}_{learning_rate_mu}/test_run_battery_{battery_capacity}_{datetime.now().strftime("%m%d_%H%M")}'
     writers  = SummaryWriter(log_dir=log_dir)
     
     ######################################################################################
@@ -339,26 +351,41 @@ def main(num_cpus=12, gamma=0.99):
                 wip_tester = tester.run_episode.remote(epsilon_tester,gamma,max_step, current_weights, mu,sigma)
                 rho = test_score[1]
                 episode_reward = test_score[2]  
+                episode_penalty = test_score[4]
+                episode_battery_penalty = test_score[5]
                 episode_bidding = test_score[6]
+                episode_step_reward = test_score[7]
                 writers.add_scalar('wip_tester/rho', rho, update_cycles)
                 writers.add_scalar('wip_tester/rewards', episode_reward, update_cycles)
                 writers.add_scalar('wip_tester/Deviation_penalty', sum(test_score[4]), update_cycles)
                 writers.add_scalar('wip_tester/Degradation', sum(test_score[5]), update_cycles)
                 bidding_history.append(episode_bidding)
-                if update_cycles % num_updates == 0:
-                    bidding_df = pd.DataFrame(episode_bidding)
-                    bidding_df.to_csv(f'drqn_apex_action/episode_bidding_battery_{current_time}.csv',index=False)
+                reward_history.append(episode_step_reward)
+                penalty_history.append(episode_penalty)
+                battery_penalty_history.append(episode_battery_penalty)
                 
+                if update_cycles % num_updates == 0:
+                    reward_df = pd.DataFrame(episode_step_reward)
+                    reward_df.to_csv(f'drqn_apex_action/episode_reward_{battery_capacity}_{current_time}.csv',index=False)
+                    bidding_df = pd.DataFrame(episode_bidding)
+                    bidding_df.to_csv(f'drqn_apex_action/episode_bidding_{battery_capacity}_{current_time}.csv',index=False)
+                    penalty_df = pd.DataFrame(episode_penalty)
+                    penalty_df.to_csv(f'drqn_apex_action/episode_penalty_{battery_capacity}_{current_time}.csv',index=False)
+                    battery_penalty_df = pd.DataFrame(episode_battery_penalty)
+                    battery_penalty_df.to_csv(f'drqn_apex_action/episode_battery_penalty_{battery_capacity}_{current_time}.csv',index=False)
+                    
             # # Phiの更新
             if update_cycles > min_epi_codesign:
                 if update_cycles % 10 == 0:
-                    phi = ray.get( learner.update_phi.remote(mu, sigma, rho_list, income_list))
+                    phi,battery_price = ray.get( learner.update_phi.remote(mu, sigma, rho_list, income_list))
                     mu,sigma = phi
-                    writers.add_scalar('phi/mu', mu, update_cycles)
+                    writers.add_scalar('battery_price', battery_price, update_cycles)
                     rho_list = []
                     income_list = []
                     print(f'Updated phi: {mu}')
-
+    
+            writers.add_scalar('phi/mu', mu, update_cycles)
+            # writers.add_scalar('battery_price', battery_price, update_cycles)
             # update epsilon
             epsilon = max(eps_end, epsilon * eps_decay) # Linear annealing
 
