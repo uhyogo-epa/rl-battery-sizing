@@ -14,9 +14,10 @@ device = torch.device("cpu")
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, rho_dim, max_action):
         super(Actor, self).__init__()
-        self.l1 = nn.Linear(state_dim+rho_dim, 32)
-        self.l2 = nn.Linear(32, 32)
-        self.l3 = nn.Linear(32, action_dim)		
+        self.hidden_state = 64
+        self.l1 = nn.Linear(state_dim+rho_dim, self.hidden_state)
+        self.l2 = nn.Linear(self.hidden_state, self.hidden_state)
+        self.l3 = nn.Linear(self.hidden_state, action_dim)		
         self.max_action = max_action
         
     def forward(self, state,rho):
@@ -29,9 +30,10 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim,rho_dim):
         super(Critic, self).__init__()
-        self.l1 = nn.Linear(state_dim + action_dim + rho_dim, 32)
-        self.l2 = nn.Linear(32, 32)
-        self.l3 = nn.Linear(32, 1)
+        self.hidden_state = 64
+        self.l1 = nn.Linear(state_dim + action_dim + rho_dim, self.hidden_state)
+        self.l2 = nn.Linear(self.hidden_state, self.hidden_state)
+        self.l3 = nn.Linear(self.hidden_state, 1)
     def forward(self, state, action,rho):
         q1 = torch.relu(self.l1(torch.cat([state, action,rho], 1)))
         q1 = torch.relu(self.l2(q1))
@@ -145,7 +147,8 @@ class CodesignDDPGagent:
               mu    = 0.1,
               sigma = 0.2,
               battery_price_max = 1000,
-              scheduling_rate = 0.1):
+              scheduling_rate = 0.1,
+              scheduling_decay = 0.99):
         
        ######################################
        # Prepare log writer
@@ -173,10 +176,13 @@ class CodesignDDPGagent:
 
        for episode in iterator:
 
-            if episode < 3000:
-                battery_price = battery_price_max*(1-np.exp(-scheduling_rate*(episode-300)))
+            if episode < 300:
+                battery_price = 0
+            elif episode< 4000:
+                battery_price = battery_price_max* (1-scheduling_rate)             
+                scheduling_rate = scheduling_rate*scheduling_decay
             else:
-                battery_price = battery_price_max  
+                battery_price = battery_price_max
             # battery_price = battery_price_max
             # リプレイバッファからランダムにバッチをサンプリング
             ##########################
