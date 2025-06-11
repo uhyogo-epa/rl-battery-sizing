@@ -14,9 +14,9 @@ device = torch.device("cpu")
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
-        self.l1 = nn.Linear(state_dim, 32)
-        self.l2 = nn.Linear(32, 32)
-        self.l3 = nn.Linear(32, action_dim)		
+        self.l1 = nn.Linear(state_dim, 64)
+        self.l2 = nn.Linear(64, 64)
+        self.l3 = nn.Linear(64, action_dim)		
         self.max_action = max_action
         
     def forward(self, state):
@@ -28,9 +28,9 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Critic, self).__init__()
-        self.l1 = nn.Linear(state_dim + action_dim, 32)
-        self.l2 = nn.Linear(32, 32)
-        self.l3 = nn.Linear(32, 1)
+        self.l1 = nn.Linear(state_dim + action_dim, 64)
+        self.l2 = nn.Linear(64, 64)
+        self.l3 = nn.Linear(64, 1)
     def forward(self, state, action):
         q1 = torch.relu(self.l1(torch.cat([state, action], 1)))
         q1 = torch.relu(self.l2(q1))
@@ -182,8 +182,8 @@ class DDPGagent:
                 next_state, reward, is_done = env.step(action)
                 episode_reward += reward
                 episode_bidding.append(env.bidding)
-                # episode_penalty_history.append(env.penalty)
-                # episode_battery_penalty_history.append(env.battery_penalty)
+                episode_penalty_history.append(env.penalty)
+                episode_battery_penalty_history.append(env.battery_penalty)
                 
                 # train Q network
                 self.replay_memory.add(state, action, next_state, reward, is_done)
@@ -215,9 +215,9 @@ class DDPGagent:
             penalty_df = pd.DataFrame(penalty_history)
             battery_penalty_df = pd.DataFrame(battery_penalty_history)
             # Save each DataFrame to CSV files
-            bidding_df.to_csv(f'action/episode_bidding_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
-            penalty_df.to_csv(f'action/episode_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
-            battery_penalty_df.to_csv(f'action/episode_battery_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
+            bidding_df.to_csv(f'ddpg_action/ddpg_action_2/episode_bidding_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
+            penalty_df.to_csv(f'ddpg_action/ddpg_action_2/episode_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
+            battery_penalty_df.to_csv(f'ddpg_action/ddpg_action_2/episode_battery_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv', index=False)
             
             print(f"Episode {episode + 1}: Reward : {episode_reward}")
             print(f"Episode {episode + 1}: episode_q0: {episode_q0}")
