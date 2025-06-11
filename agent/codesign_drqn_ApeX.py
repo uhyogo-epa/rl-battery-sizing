@@ -19,7 +19,7 @@ class Q_net(nn.Module):
         assert action_space is not None, "None action_space input: action_space should be selected."
         assert rho_space is not None, "None rho_space input: rho_space should be selected."
         
-        self.hidden_space = 64
+        self.hidden_space = 128
         self.state_space = state_space 
         self.action_space = action_space
         self.rho_space = rho_space
