@@ -23,7 +23,7 @@ class Q_net(nn.Module):
         assert state_space is not None, "None state_space input: state_space should be selected."
         assert action_space is not None, "None action_space input: action_space should be selected."
 
-        self.hidden_space = 32
+        self.hidden_space = 64
         self.state_space = state_space
         self.action_space = action_space
 
@@ -194,7 +194,9 @@ class DRQNagent:
              SHOW_PROGRESS = True,
              SAVE_AGENTS   = True,
              SAVE_FREQ     = 1,
-             RESTART_EP    = None
+             RESTART_EP    = None,
+             seed          = 1,
+             battery_times = 0.1
               ):
             
         ######################################
@@ -219,6 +221,8 @@ class DRQNagent:
         bidding_history = []
         current_datetime = datetime.now().strftime('%Y%m%d_%H%M')
         epsilon = self.eps_start
+        penalty_history = []
+        battery_penalty_history = []
         
         # Train
         for episode in iterator:
@@ -226,7 +230,8 @@ class DRQNagent:
             done = False
             h, c = self.critic.init_hidden_state(self.batch_size, training=False)
             episode_bidding = []  # List to collect bidding data
-
+            episode_penalty_history = []
+            episode_battery_penalty_history = []
             episode_record = EpisodeBuffer()
 
             episode_reward = 0
@@ -243,7 +248,8 @@ class DRQNagent:
                 s_prime, r, done = env.step(a)
                 obs_prime = s_prime
                 episode_bidding.append(env.bidding)  # Collect bidding data
-                
+                episode_penalty_history.append(env.penalty)
+                episode_battery_penalty_history.append(env.battery_penalty)
                 with torch.no_grad():
                     episode_q0, _, _ = self.critic(torch.from_numpy(obs).float().to(device).unsqueeze(0).unsqueeze(0), h, c)
                     max_q_value = episode_q0.max().item()
@@ -269,6 +275,8 @@ class DRQNagent:
             self.episode_memory.put(episode_record)
 
             bidding_history.append(episode_bidding)  # Save episode bidding data
+            penalty_history.append(episode_penalty_history)
+            battery_penalty_history.append(episode_battery_penalty_history)
             
             print(f"Episode {episode+ 1}: Reward : {episode_reward}")
             print(f"Episode {episode + 1}: Reward_discount : {episode_reward_discount}")
@@ -291,9 +299,13 @@ class DRQNagent:
         # torch.save(Q_target.state_dict(),f'Q_net/Q_target_net_{current_datetime}.pth')
         
         bidding_df = pd.DataFrame(bidding_history)
+        penalty_df = pd.DataFrame(penalty_history)
+        battery_penalty_df = pd.DataFrame(battery_penalty_history)
         
         # Save each DataFrame to CSV files
-        bidding_df.to_csv(f'action/episode_bidding_{current_datetime}.csv', index=False)
+        bidding_df.to_csv(f'drqn_action/drqn_action_2/episode_bidding_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv',index=False)
+        penalty_df.to_csv(f'drqn_action/drqn_action_2/episode_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv',index=False)
+        battery_penalty_df.to_csv(f'drqn_action/drqn_action_2/episode_battery_penalty_seed_{seed}_{current_datetime}_battery_{round(battery_times,2)}.csv',index=False)
         
         
         
