@@ -23,7 +23,7 @@ class Q_net(nn.Module):
         assert state_space is not None, "None state_space input: state_space should be selected."
         assert action_space is not None, "None action_space input: action_space should be selected."
 
-        self.hidden_space = 32
+        self.hidden_space = 64
         self.state_space = state_space
         self.action_space = action_space
         self.rho_space    = rho_space
@@ -209,7 +209,8 @@ class CodesignDRQNagent:
              mu    = 0.1,
              sigma = 0.2,
              battery_price_max=1000,
-             scheduling_rate = 0.1
+             scheduling_rate = 1,
+             scheduling_decay = 0.95
               ):
             
         ######################################
@@ -240,10 +241,15 @@ class CodesignDRQNagent:
         battery_penalty_history = []
         # Train
         for episode in iterator:
-            if episode < 3000:
-                battery_price = battery_price_max*(1-np.exp(-scheduling_rate*(episode-300)))
+            if episode < 300:
+                battery_price = 0
+                # battery_price = battery_price_max*(1-np.exp(-scheduling_rate*(episode-300)))
+            elif episode < 4000:
+                battery_price = battery_price_max* (1-scheduling_rate)             
+                scheduling_rate = scheduling_rate*scheduling_decay
+            
             else:
-                battery_price = battery_price_max  
+                battery_price = battery_price_max
             rho = max(0.05, np.random.normal(mu,sigma))
             obs = env.reset(rho)
             done = False
@@ -322,7 +328,7 @@ class CodesignDRQNagent:
             if LOG_DIR:
                 summary_writer.add_scalar("Episode Reward", episode_reward, episode)
                 summary_writer.add_scalar("Episode Q0",     max_q_value,     episode)
-                summary_writer.add_scalar("epsilon",     epsilon,     episode)
+                summary_writer.add_scalar("battery_price",     battery_price,     episode)
                 summary_writer.add_scalar("mu",     mu,     episode)
                 summary_writer.flush()
         summary_writer.close()
